@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Logistics | 新能源调度系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            background-color: #020617; 
+            color: #e5e7eb; 
+            overflow: hidden; 
+            font-family: 'Urbanist', sans-serif;
+        }
+        main {
+            background-image: radial-gradient(#1e293b 1px, transparent 1px);
+            background-size: 20px_20px;
+        }
+        .glass {
+            background: rgba(18, 18, 18, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* 开始页面背景渐变 */
+        .start-gradient {
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+        }
+        /* 按钮悬停动画 */
+        .btn-primary {
+            background: #3b82f6;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 0 30px rgba(59, 130, 246, 0.6);
+            background: #60a5fa;
+        }
+        /* 遮罩层消失动画 */
+        #start-screen {
+            transition: opacity 0.8s ease, visibility 0.8s;
+        }
+        .status-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="flex h-screen w-screen relative">
+
+    <div id="start-screen" class="absolute inset-0 z-50 flex items-center justify-center bg-black/90 start-gradient">
+        <div class="text-center">
+            <div class="mb-6 inline-block p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20">
+                <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                </svg>
+            </div>
+            <h1 class="text-6xl font-bold tracking-tighter text-white mb-2">AI LOGISTICS</h1>
+            <p class="text-gray-400 mb-10 tracking-[0.3em] text-sm font-light">RENEWABLE ENERGY COORDINATED DISPATCH</p>
+            <button onclick="startSimulation()" class="btn-primary px-12 py-4 rounded-full font-bold text-white tracking-widest text-sm uppercase">
+                Initialize System / 启动模拟
+            </button>
+        </div>
+    </div>
+
+    <aside class="w-80 h-full glass p-6 flex flex-col z-10 shadow-2xl">
+        <div class="mb-8">
+            <h1 class="text-xl font-bold tracking-tighter text-white">SYSTEM<span class="text-blue-500 underline decoration-2">CORE</span></h1>
+            <p class="text-xs text-gray-500 uppercase tracking-widest mt-1">模拟调度监控面板</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <div class="bg-white/5 p-3 rounded-lg border border-white/10">
+                <p class="text-xs text-gray-500">模拟时长</p>
+                <p id="tick-count" class="text-xl font-mono">0s</p>
+            </div>
+            <div class="bg-white/5 p-3 rounded-lg border border-white/10">
+                <p class="text-xs text-gray-500">待处理任务</p>
+                <p id="task-count" class="text-xl font-mono text-orange-400">0</p>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto pr-2" id="vehicle-list">
+            </div>
+    </aside>
+
+    <main class="flex-1 relative bg-[radial-gradient(#1a1a1a_1px,transparent_1px)] [background-size:20px_20px]">
+        <canvas id="mapCanvas" class="w-full h-full"></canvas>
+        
+        <div class="absolute top-6 right-6 flex gap-4">
+            <div class="glass px-4 py-2 rounded-full text-xs flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-red-500"></span> 仓库 (Warehouse)
+            </div>
+            <div class="glass px-4 py-2 rounded-full text-xs flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-orange-500 status-dot"></span> 任务 (Task)
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+        let mapData = null;
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        let updateInterval = null; // 用于存储定时器
+        const API_BASE = 'http://127.0.0.1:5000/api';
+
+        function resize() {
+            canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+            canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            calculateLayout();
+            if(mapData) renderStaticMap();
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 预加载地图数据（背景静默加载）
+        async function fetchMap() {
+            try {
+                const res = await fetch(`${API_BASE}/map`);
+                mapData = await res.json();
+                const padding = 20;
+                scale = Math.min(
+                    (canvas.offsetWidth - padding * 2) / mapData.width,
+                    (canvas.offsetHeight - padding * 2) / mapData.height
+                );
+                renderStaticMap(); // 初始绘制静态背景
+            } catch (e) { console.error("Map initialization failed", e); }
+        }
+
+        // 2. 新增：开启模拟的逻辑
+        async function startSimulation() {
+            try {
+                // 告诉后端：可以开始步进了
+                const response = await fetch(`${API_BASE}/start`, { method: 'POST' });
+                
+                if (response.ok) {
+                    // 动画效果：隐藏遮罩层
+                    const screen = document.getElementById('start-screen');
+                    screen.style.opacity = '0';
+                    setTimeout(() => screen.style.visibility = 'hidden', 800);
+
+                    // 启动实时更新轮询
+                    if (!updateInterval) {
+                        updateInterval = setInterval(update, 500);
+                    }
+                }
+            } catch (e) {
+                alert("连接后端服务器失败，请检查 app.py 是否已启动。");
+            }
+        }
+        function calculateLayout() {
+            if (!mapData) return;
+            const padding = 60; // 地图边缘留白
+            // 计算缩放比例，使其始终适应屏幕
+            const scaleX = (canvas.offsetWidth - padding * 2) / mapData.width;
+            const scaleY = (canvas.offsetHeight - padding * 2) / mapData.height;
+    
+            // 这里的 1.5 是你之前要求的放大系数，可以根据需要调整
+            scale = Math.min(scaleX, scaleY) * 1.2; 
+
+            // 计算居中偏移
+            offsetX = (canvas.offsetWidth - mapData.width * scale) / 2;
+            offsetY = (canvas.offsetHeight - mapData.height * scale) / 2;
+        }
+
+        // 绘制静态地图（无状态更新时显示）
+        function renderStaticMap() {
+            if (!mapData) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const offsetX = (canvas.offsetWidth - mapData.width * scale) / 2;
+            const offsetY = (canvas.offsetHeight - mapData.height * scale) / 2;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.lineWidth = 0.8;
+            mapData.links.forEach(link => {
+                const s = mapData.nodes.find(n => n.id === link.source);
+                const t = mapData.nodes.find(n => n.id === link.target);
+                ctx.beginPath();
+                ctx.moveTo(s.x * scale + offsetX, s.y * scale + offsetY);
+                ctx.lineTo(t.x * scale + offsetX, t.y * scale + offsetY);
+                ctx.stroke();
+            });
+            // 绘制基础路点，让地图不空洞
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            mapData.nodes.forEach(node => {
+                ctx.beginPath();
+                ctx.arc(node.x * scale + offsetX, node.y * scale + offsetY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        async function update() {
+            if (!mapData) return;
+            const res = await fetch(`${API_BASE}/status`);
+            const status = await res.json();
+
+            calculateLayout();
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const offsetX = (canvas.offsetWidth - mapData.width * scale) / 2;
+            const offsetY = (canvas.offsetHeight - mapData.height * scale) / 2;
+
+            // 绘制道路
+            ctx.shadowBlur = 5;
+            ctx.shadowColor = "rgba(255, 255, 255, 0.5)"
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 1.2;
+            mapData.links.forEach(link => {
+                const s = mapData.nodes.find(n => n.id === link.source);
+                const t = mapData.nodes.find(n => n.id === link.target);
+                ctx.beginPath();
+                ctx.moveTo(s.x * scale + offsetX, s.y * scale + offsetY);
+                ctx.lineTo(t.x * scale + offsetX, t.y * scale + offsetY);
+                ctx.stroke();
+            });
+            ctx.shadowBlur = 0;
+
+            // 绘制节点
+            mapData.nodes.forEach(node => {
+                const x = node.x * scale + offsetX;
+                const y = node.y * scale + offsetY;
+                const isWarehouse = (node.id === mapData.warehouse_id);
+                const hasTask = status.tasks.some(t => t.target_id === node.id);
+    
+                if (isWarehouse) {
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = "#ef4444";
+                    ctx.fillStyle = '#ef4444'; 
+                    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 0;
+                } else if (hasTask) {
+                    ctx.shadowBlur = 15; // 为任务增加橙色光晕
+                    ctx.shadowColor = "#f97316";
+                    ctx.fillStyle = '#f97316';
+                    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+                    ctx.shadowBlur = 0;
+                } else {
+                    ctx.shadowBlur = 8;
+                    ctx.shadowColor = "rgba(59, 130, 246, 0.5)";
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.beginPath(); 
+                    ctx.arc(node.x * scale + offsetX, node.y * scale + offsetY, 4.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            });
+
+            // 绘制车辆
+            status.vehicles.forEach(v => {
+                const node = mapData.nodes.find(n => n.id === v.node_id);
+                const x = node.x * scale + offsetX;
+                const y = node.y * scale + offsetY;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "#3b82f6"; // 车辆蓝色光晕
+                ctx.fillStyle = '#3b82f6';
+                ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = 'rgba(59, 130, 246, 0.4)';
+                ctx.lineWidth = 4; ctx.stroke();
+            });
+
+            updateUI(status);
+        }
+
+        function updateUI(status) {
+            document.getElementById('tick-count').innerText = status.tick + 's';
+            document.getElementById('task-count').innerText = status.tasks.length;
+            const list = document.getElementById('vehicle-list');
+            list.innerHTML = status.vehicles.map(v => `
+                <div class="bg-white/5 p-4 rounded-xl border border-white/10 mb-3 hover:bg-white/10 transition-colors">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-[10px] font-mono text-blue-400">VEHICLE-${v.id}</span>
+                        <span class="text-[9px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 uppercase">${v.status}</span>
+                    </div>
+                    <div class="w-full h-1 bg-gray-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-blue-500 transition-all duration-500" style="width: ${(v.battery/v.max_battery)*100}%"></div>
+                    </div>
+                    <div class="flex justify-between mt-2 text-[10px] text-gray-500">
+                        <span>载重: ${v.load}kg</span>
+                        <span>电量: ${Math.round((v.battery/v.max_battery)*100)}%</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 初始化
+        fetchMap();
+    </script>
+</body>
+</html>
