@@ -34,15 +34,18 @@ class TaskManager:
         self.max_tasks_limit = max_tasks_limit
         self.task_counter = 0  # 用于生成唯一的任务ID
 
-        # 获取所有可作为目的地的节点（排除仓库节点，任务通常送往普通道路点）
+        # 获取所有可作为目的地的节点（排除仓库和充电站节点）
         self.potential_targets = [
-            nid for nid, node in graph.nodes.items() if node.type != "warehouse"
+            nid for nid, node in graph.nodes.items()
+            if node.type not in ("warehouse", "charging_station")
         ]
 
     def generate_task(self, current_time):
         """
         生成一个随机任务
         """
+        if not self.potential_targets:
+            return None
         # 1. 检查当前未完成（pending 或 assigned）的任务数量是否达到上限
         active_tasks = [t for t in self.tasks if t.status != "completed"]
         if len(active_tasks) >= self.max_tasks_limit:
