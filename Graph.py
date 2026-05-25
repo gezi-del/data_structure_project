@@ -1,6 +1,5 @@
 import random
 import math
-import matplotlib.pyplot as plt
 from collections import deque
 
 
@@ -595,6 +594,8 @@ def generate_connected_weighted_graph(
 # =========================
 
 def visualize_graph(graph, show_weights=False):
+    import matplotlib.pyplot as plt
+
     plt.figure(figsize=(10, 8))
 
     drawn_edges = set()

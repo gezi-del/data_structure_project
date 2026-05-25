@@ -78,9 +78,9 @@ class FleetController:
         strategy="nearest",
         allow_multi_vehicle=True,
         tick_seconds=1.0,
-        speed_scale=12.0,
+        speed_scale=45.0,
         reserve_battery_ratio=0.1,
-        task_timeout=120,
+        task_timeout=180,
     ):
         self.graph = graph
         self.task_manager = task_manager
@@ -104,6 +104,12 @@ class FleetController:
         self.timeout_penalty = 50.0
         self.timeout_penalty_per_s = 1.0
         self.total_score = 0.0
+        self.total_distance = 0.0
+        self.completed_tasks = 0
+        self.timeout_tasks = 0
+        self.charge_sessions = 0
+        self.total_charge_wait_time = 0.0
+        self.completed_task_records = []
 
     def set_strategy(self, strategy):
         self.strategy = strategy
@@ -125,6 +131,8 @@ class FleetController:
             if current_tick - task.appear_time > self.task_timeout:
                 self.total_score -= self.timeout_penalty
                 meta["timeout_penalized"] = True
+                task.timeout = True
+                self.timeout_tasks += 1
 
     def _update_charging(self, current_tick):
         _ = current_tick
@@ -179,6 +187,7 @@ class FleetController:
 
                 travel = min(distance_budget, state.distance_to_next)
                 vehicle.drive(travel)
+                self.total_distance += travel
                 state.distance_to_next -= travel
                 distance_budget -= travel
 
@@ -212,7 +221,7 @@ class FleetController:
 
                 if vehicle.current_node_id != self.warehouse_id:
                     if self._can_reach_warehouse(vehicle):
-                        self._route_to_warehouse(state, mission="pickup")
+                        self._route_to_warehouse(state, vehicle.current_node_id, mission="pickup")
                         vehicle.status = "moving"
                     else:
                         self._plan_charge_route(idx)
@@ -501,6 +510,8 @@ class FleetController:
             task.finish_time = current_tick
             self._score_task(task, meta, current_tick)
             meta["locked_vehicle_id"] = None
+            self.completed_tasks += 1
+            self._restore_task_node_if_finished(task)
         else:
             if not self.allow_multi_vehicle:
                 task.status = "assigned"
@@ -541,6 +552,8 @@ class FleetController:
         wait_slots = max(0, self.graph.nodes[station_id].queue_count - 1)
         state.wait_time_left = wait_slots * vehicle.get_charge_time_seconds()
         state.charge_time_left = vehicle.get_charge_time_seconds()
+        self.charge_sessions += 1
+        self.total_charge_wait_time += state.wait_time_left
         state.mission = "charge"
         vehicle.status = "charging"
 
@@ -562,7 +575,45 @@ class FleetController:
 
         self.total_score += score
         meta["last_score"] = score
+        task.score = score
+        task.distance = distance
+        task.timeout = time_taken > self.task_timeout
+        self.completed_task_records.append({
+            "id": task.id,
+            "appear_time": task.appear_time,
+            "finish_time": current_tick,
+            "time_taken": time_taken,
+            "weight": task.weight,
+            "distance": distance,
+            "score": score,
+            "timeout": task.timeout,
+        })
         return score
+
+    def _restore_task_node_if_finished(self, task):
+        has_active_task = any(
+            other.target_id == task.target_id and other.status != "completed"
+            for other in self.task_manager.tasks
+        )
+        if not has_active_task and self.graph.nodes[task.target_id].type == "task_point":
+            self.graph.nodes[task.target_id].type = "road"
+
+    def get_metrics(self):
+        total_finished_time = sum(item["time_taken"] for item in self.completed_task_records)
+        avg_finish_time = (
+            total_finished_time / self.completed_tasks
+            if self.completed_tasks
+            else 0.0
+        )
+        return {
+            "total_score": round(self.total_score, 2),
+            "completed_tasks": self.completed_tasks,
+            "timeout_tasks": self.timeout_tasks,
+            "avg_finish_time": round(avg_finish_time, 2),
+            "total_distance": round(self.total_distance, 2),
+            "charge_sessions": self.charge_sessions,
+            "total_charge_wait_time": round(self.total_charge_wait_time, 2),
+        }
 
     def _clear_mission(self, vehicle_idx):
         vehicle = self.vehicles[vehicle_idx]

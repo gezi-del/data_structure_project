@@ -7,16 +7,20 @@ class Task:
     任务类：记录单个订单的详细信息
     """
 
-    def __init__(self, task_id, appear_time, target_node_id, target_coords, weight):
+    def __init__(self, task_id, appear_time, target_node_id, target_coords, weight, due_time=None):
         self.id = task_id
         self.appear_time = appear_time  # 产生时间 (单位：秒或tick)
         self.target_id = target_node_id  # 目的节点ID
         self.coords = target_coords  # 目的地点坐标 (x, y)
         self.weight = weight  # 货物重量 (kg)
+        self.due_time = due_time if due_time is not None else appear_time + 120
 
         # 任务状态：pending (等待中), assigned (已派车), completed (已送达)
         self.status = "pending"
         self.finish_time = None  # 记录完成时间用于评分
+        self.score = 0.0
+        self.distance = 0.0
+        self.timeout = False
 
     def __repr__(self):
         return (f"[任务#{self.id}] 时间:{self.appear_time}s | "

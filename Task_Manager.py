@@ -8,14 +8,23 @@ class TaskManager:
     任务管理器：负责任务的按概率生成、上限控制和状态维护
     """
 
-    def __init__(self, graph, max_tasks_limit=10):
+    def __init__(
+        self,
+        graph,
+        max_tasks_limit=10,
+        spawn_wait_seconds=30.0,
+        spawn_increase_per_second=0.02,
+        task_blueprints=None,
+    ):
         self.graph = graph
         self.tasks = []  # 存储所有生成的任务
         self.max_tasks_limit = max_tasks_limit
         self.task_counter = 0  # 用于生成唯一的任务ID
         self.last_generate_time = 0.0
-        self.spawn_wait_seconds = 30.0
-        self.spawn_increase_per_second = 0.02
+        self.spawn_wait_seconds = spawn_wait_seconds
+        self.spawn_increase_per_second = spawn_increase_per_second
+        self.task_blueprints = sorted(task_blueprints or [], key=lambda item: item["appear_time"])
+        self.next_blueprint_index = 0
 
         # 获取所有可作为目的地的节点（排除仓库和充电站节点）
         self.potential_targets = [
@@ -27,6 +36,9 @@ class TaskManager:
         """
         每个单位时间调用一次，按概率生成随机数量的任务
         """
+        if self.task_blueprints:
+            return self._release_blueprint_tasks(current_time)
+
         if not self.potential_targets:
             return []
 
@@ -53,6 +65,23 @@ class TaskManager:
 
         return generated_this_step
 
+    def _release_blueprint_tasks(self, current_time):
+        generated_this_step = []
+        while self.next_blueprint_index < len(self.task_blueprints):
+            blueprint = self.task_blueprints[self.next_blueprint_index]
+            if blueprint["appear_time"] > current_time:
+                break
+
+            active_tasks = [t for t in self.tasks if t.status != "completed"]
+            if len(active_tasks) >= self.max_tasks_limit:
+                break
+
+            task = self._create_task_from_blueprint(blueprint)
+            generated_this_step.append(task)
+            self.next_blueprint_index += 1
+
+        return generated_this_step
+
     def _spawn_probability(self, current_time):
         elapsed = current_time - self.last_generate_time
         if elapsed < self.spawn_wait_seconds:
@@ -76,7 +105,8 @@ class TaskManager:
             appear_time=current_time,
             target_node_id=target_id,
             target_coords=(target_node.x, target_node.y),
-            weight=weight
+            weight=weight,
+            due_time=current_time + 180,
         )
 
         self.tasks.append(new_task)
@@ -86,6 +116,23 @@ class TaskManager:
         if self.graph.nodes[target_id].type == "road":
             self.graph.nodes[target_id].type = "task_point"
 
+        return new_task
+
+    def _create_task_from_blueprint(self, blueprint):
+        target_id = blueprint["target_id"]
+        target_node = self.graph.nodes[target_id]
+        new_task = Task(
+            task_id=self.task_counter,
+            appear_time=blueprint["appear_time"],
+            target_node_id=target_id,
+            target_coords=(target_node.x, target_node.y),
+            weight=blueprint["weight"],
+            due_time=blueprint.get("due_time"),
+        )
+        self.tasks.append(new_task)
+        self.task_counter += 1
+        if self.graph.nodes[target_id].type == "road":
+            self.graph.nodes[target_id].type = "task_point"
         return new_task
 
     def get_pending_tasks(self):
@@ -98,4 +145,11 @@ class TaskManager:
             if t.id == task_id:
                 t.status = "completed"
                 t.finish_time = finish_time
+                if self.graph.nodes[t.target_id].type == "task_point":
+                    has_active_task = any(
+                        other.target_id == t.target_id and other.status != "completed"
+                        for other in self.tasks
+                    )
+                    if not has_active_task:
+                        self.graph.nodes[t.target_id].type = "road"
                 break
