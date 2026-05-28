@@ -1,0 +1,216 @@
+{
+  "passed": [
+    {
+      "section": "5.4.1",
+      "test": "BFS connectivity (all 3 scales)",
+      "status": "PASS",
+      "detail": "3 scales all passed is_connected() check"
+    },
+    {
+      "section": "5.4.1",
+      "test": "Dijkstra vs BFS (100 random pairs)",
+      "status": "PASS",
+      "detail": "100/100 pairs produced valid paths"
+    },
+    {
+      "section": "5.4.1",
+      "test": "ShortestPathCache bidirectional consistency",
+      "status": "PASS",
+      "detail": "Cache stores both (a,b) and (b,a) consistently"
+    },
+    {
+      "section": "5.4.2",
+      "test": "Battery boundary guard (clip to [0, capacity])",
+      "status": "PASS",
+      "detail": "lower=True, upper=True"
+    },
+    {
+      "section": "5.4.2",
+      "test": "Load boundary guard (clip to [0, 1500kg])",
+      "status": "PASS",
+      "detail": "lower=True, upper=True"
+    },
+    {
+      "section": "5.4.2",
+      "test": "Energy consumption: consumption = distance * energy_per_km",
+      "status": "PASS",
+      "detail": "drove 45.0km, consumed=45.0, expected=45.0"
+    },
+    {
+      "section": "5.4.2",
+      "test": "Charge time formula: 15 manual test cases",
+      "status": "PASS",
+      "detail": "15/15 passed"
+    },
+    {
+      "section": "5.4.3",
+      "test": "queue_count atomic increment/decrement",
+      "status": "PASS",
+      "detail": "0->5->0"
+    },
+    {
+      "section": "5.4.3",
+      "test": "Concurrent 20 vehicles, queue_limit strict enforcement",
+      "status": "PASS",
+      "detail": "entered=10, limit=10, is_full=True"
+    },
+    {
+      "section": "5.4.3",
+      "test": "Sequential release restores capacity",
+      "status": "PASS",
+      "detail": "queue_count=0, is_full=False"
+    },
+    {
+      "section": "5.4.4",
+      "test": "Deterministic scenario step-by-step state tracking",
+      "status": "PASS",
+      "detail": "240 state transitions observed, missions: {'return', 'idle', 'task'}"
+    },
+    {
+      "section": "5.4.4",
+      "test": "vehicle_states and task_meta field tracking",
+      "status": "PASS",
+      "detail": "vehicles tracked=True, task_meta exists=True"
+    },
+    {
+      "section": "5.4.4",
+      "test": "End-to-end deterministic scenario (fixed map, tasks, vehicles)",
+      "status": "PASS",
+      "detail": "Ran 30s, metrics collected successfully"
+    },
+    {
+      "section": "5.4.5",
+      "test": "Elite preservation: best fitness monotonic non-decreasing",
+      "status": "PASS",
+      "detail": "Best fitness 209 → 1303, +17 improvements over 48 gen"
+    },
+    {
+      "section": "5.4.5",
+      "test": "OX crossover structural integrity (1000 checks)",
+      "status": "PASS",
+      "detail": "1000/1000 valid (no duplicates, no omissions)"
+    },
+    {
+      "section": "5.4.5",
+      "test": "Tournament selection fitness-proportional (10000 trials)",
+      "status": "PASS",
+      "detail": "top3 selected=7128, bottom3 selected=94"
+    },
+    {
+      "section": "5.4.6",
+      "test": "Fixed seed 3-run reproducibility (小规模)",
+      "status": "PASS",
+      "detail": "scores=[-20.21, -20.21, -20.21], completed=[3, 3, 3]"
+    },
+    {
+      "section": "5.4.6",
+      "test": "Fixed seed 3-run reproducibility (中规模)",
+      "status": "PASS",
+      "detail": "scores=[1001.25, 1001.25, 1001.25], completed=[17, 17, 17]"
+    },
+    {
+      "section": "5.4.6",
+      "test": "Fixed seed 3-run reproducibility (大规模)",
+      "status": "PASS",
+      "detail": "scores=[995.23, 995.23, 995.23], completed=[24, 24, 24]"
+    },
+    {
+      "section": "5.4.6",
+      "test": "No-seed mode generates different random maps",
+      "status": "PASS",
+      "detail": "Graphs differ: True"
+    }
+  ],
+  "failed": [],
+  "details": {
+    "5.4.1": {
+      "connected_scales": 3,
+      "dijkstra_pairs_tested": 100,
+      "dijkstra_valid": 100,
+      "cache_bidirectional_ok": true
+    },
+    "5.4.2": {
+      "battery_boundary_ok": true,
+      "load_boundary_ok": true,
+      "energy_formula_ok": true,
+      "charge_tests_passed": 15,
+      "charge_tests_total": 15
+    },
+    "5.4.3": {
+      "atomic_ok": true,
+      "queue_limit_enforced": true,
+      "restore_ok": true,
+      "max_concurrent": 20,
+      "queue_limit": 10
+    },
+    "5.4.4": {
+      "state_transitions": 240,
+      "missions_observed": [
+        "return",
+        "idle",
+        "task"
+      ],
+      "sim_seconds": 30.0,
+      "has_vehicle_states": true,
+      "has_task_meta": true
+    },
+    "5.4.5": {
+      "ox_checks": 1000,
+      "ox_valid": 1000,
+      "tournament_trials": 10000,
+      "tournament_top3": 7128,
+      "tournament_bottom3": 94,
+      "ga_generations": 48,
+      "ga_initial_fitness": 208.69,
+      "ga_final_fitness": 1302.88,
+      "ga_improvements": 17,
+      "monotonic": true
+    },
+    "5.4.6": {
+      "scales_tested": 3,
+      "all_identical": true,
+      "per_scale": {
+        "small": {
+          "scores": [
+            -20.21,
+            -20.21,
+            -20.21
+          ],
+          "completed": [
+            3,
+            3,
+            3
+          ],
+          "identical": true
+        },
+        "medium": {
+          "scores": [
+            1001.25,
+            1001.25,
+            1001.25
+          ],
+          "completed": [
+            17,
+            17,
+            17
+          ],
+          "identical": true
+        },
+        "large": {
+          "scores": [
+            995.23,
+            995.23,
+            995.23
+          ],
+          "completed": [
+            24,
+            24,
+            24
+          ],
+          "identical": true
+        }
+      },
+      "no_seed_different": true
+    }
+  }
+}
